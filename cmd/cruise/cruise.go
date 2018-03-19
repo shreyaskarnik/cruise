@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Cruise automates the creation of HTTP status checks for ingress resources.
 package main
 
 import (
@@ -18,38 +19,39 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
+	"k8s.io/api/core/v1"
+	"k8s.io/api/extensions/v1beta1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/heptio/cruise/internal/cruise"
-	"github.com/heptio/cruise/internal/k8s"
-	"github.com/heptio/cruise/internal/workgroup"
+	"github.com/heptiolabs/cruise/internal/cruise"
+	"github.com/russellcardullo/go-pingdom/pingdom"
 
 	"github.com/sirupsen/logrus"
 )
 
-// this is necessary due to #113 wherein glog neccessitates a call to flag.Parse
-// before any logging statements can be invoked. (See also https://github.com/golang/glog/blob/master/glog.go#L679)
-// unsure why this seemingly unnecessary prerequisite is in place but there must be some sane reason.
 func init() {
+	// thanks, glog
 	flag.Parse()
 }
 
 func main() {
 	log := logrus.StandardLogger()
-	c := &cruise.Cruise{
-		FieldLogger: log,
-	}
-
 	app := kingpin.New("cruise", "Remote HTTP monitoring operator.")
 
 	serve := app.Command("serve", "Serve xDS API traffic")
 	inCluster := serve.Flag("incluster", "use in cluster configuration.").Bool()
 	kubeconfig := serve.Flag("kubeconfig", "path to kubeconfig (if not in running inside a cluster)").Default(filepath.Join(os.Getenv("HOME"), ".kube", "config")).String()
+	username := serve.Flag("username", "Pingdom Username").Default(os.Getenv("PINGDOM_USERNAME")).String()
+	password := serve.Flag("password", "Pingdom Password").Default(os.Getenv("PINGDOM_PASSWORD")).String()
+	apikey := serve.Flag("apikey", "Pingdom API Key").Default(os.Getenv("PINGDOM_APIKEY")).String()
 
 	args := os.Args[1:]
 	switch kingpin.MustParse(app.Parse(args)) {
@@ -58,17 +60,14 @@ func main() {
 		os.Exit(2)
 	case serve.FullCommand():
 		log.Infof("args: %v", args)
-		var g workgroup.Group
-
-		// buffer notifications to t to ensure they are handled sequentially.
-		buf := k8s.NewBuffer(&g, c, log, 128)
 
 		client := newClient(*kubeconfig, *inCluster)
-
-		wl := log.WithField("context", "watch")
-		k8s.WatchIngress(&g, client, wl, buf)
-
-		g.Run()
+		c := &cruise.Cruise{
+			FieldLogger: log.WithField("context", "cruise"),
+			Client:      pingdom.NewClient(*username, *password, *apikey),
+		}
+		w := watchIngress(client, c)
+		w.Run(nil)
 	}
 }
 
@@ -86,6 +85,15 @@ func newClient(kubeconfig string, inCluster bool) *kubernetes.Clientset {
 	client, err := kubernetes.NewForConfig(config)
 	check(err)
 	return client
+}
+
+func watchIngress(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler) cache.SharedInformer {
+	lw := cache.NewListWatchFromClient(client.ExtensionsV1beta1().RESTClient(), "ingresses", v1.NamespaceAll, fields.Everything())
+	sw := cache.NewSharedInformer(lw, new(v1beta1.Ingress), 30*time.Minute)
+	for _, r := range rs {
+		sw.AddEventHandler(r)
+	}
+	return sw
 }
 
 func check(err error) {

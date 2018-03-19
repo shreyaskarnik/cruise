@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: heptio-cruise
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cruise
+  namespace: heptio-cruise
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: cruise
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cruise
+subjects:
+- kind: ServiceAccount
+  name: cruise
+  namespace: heptio-cruise
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: cruise
+rules:
+- apiGroups:
+  - extensions
+  resources:
+  - ingresses
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: cruise
+  name: cruise
+  namespace: heptio-cruise
+spec:
+  selector:
+    matchLabels:
+      app: cruise
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: cruise
+    spec:
+      containers:
+      - image: gcr.io/heptio-images/cruise:master
+        imagePullPolicy: Always
+        name: cruise
+        command: ["cruise"]
+        args: ["serve", "--incluster"]
+        env:
+          - name: PINGDOM_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: cruise
+                key: PINGDOM_USERNAME
+          - name: PINGDOM_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: cruise
+                key: PINGDOM_PASSWORD
+          - name: PINGDOM_APIKEY
+            valueFrom:
+              secretKeyRef:
+                name: cruise
+                key: PINGDOM_APIKEY
+      serviceAccountName: cruise

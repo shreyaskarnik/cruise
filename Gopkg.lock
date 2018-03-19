@@ -205,6 +205,12 @@
   version = "v2.0.1"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/russellcardullo/go-pingdom"
+  packages = ["pingdom"]
+  revision = "a213165348dd158c15258e0653f9dd7c0fb460ca"
+
+[[projects]]
   name = "github.com/sirupsen/logrus"
   packages = ["."]
   revision = "c155da19408a8799da419ed3eeb0cb5db0ad5dbc"
@@ -462,6 +468,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "1e26df98add6227b3a7783a5013b8a238224bdafb8abca5f1a7c4494df5c6da4"
+  inputs-digest = "e3960a635ea838d8df31853eed0f3c850c58d5ceab6afad994c7b2dc2c5d020f"
   solver-name = "gps-cdcl"
   solver-version = 1
