@@ -9,6 +9,8 @@ Stress free HTTP monitoring for your Kubernetes hosted Web Applications.
 ## Overview
 Cruise automatically configures HTTP monitoring of Kubernetes Ingress resources.
 
+Read the [annoucement here][3].
+
 ## Installation
 
 1. Deploy Cruise to your cluster
@@ -29,3 +31,4 @@ Pingdom will let you know if any of your web applications have run aground.
 [0]: https://github.com/heptio
 [1]: https://travis-ci.org/heptiolabs/cruise.svg?branch=master
 [2]: https://travis-ci.org/heptiolabs/cruise
+[3]: https://blog.heptio.com/hello-cruise-491852b98a89
