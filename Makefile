@@ -1,3 +1,10 @@
+PROJECT = cruise
+REGISTRY ?= gcr.io/heptio-images
+IMAGE := $(REGISTRY)/$(PROJECT)
+
+GIT_REF = $(shell git rev-parse --short=8 --verify HEAD)
+VERSION ?= $(GIT_REF)
+
 test: install
 	go test ./...
 
@@ -8,3 +15,13 @@ check: test
 install:
 	go install -v -tags "oidc gcp" ./...
 
+container:
+	docker build . -t $(IMAGE):$(VERSION)
+
+push: container
+	docker push $(IMAGE):$(VERSION)
+	@if git describe --tags --exact-match >/dev/null 2>&1; \
+	then \
+	    docker tag $(IMAGE):$(VERSION) $(IMAGE):latest; \
+	    docker push $(IMAGE):latest; \
+	fi
