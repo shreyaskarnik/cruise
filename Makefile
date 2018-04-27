@@ -1,5 +1,5 @@
 test: install
-	go test ./...
+	go test ./... -v -cover
 
 check: test
 	@echo Checking code is gofmted
