@@ -1,19 +1,19 @@
 [[constraint]]
   name="k8s.io/client-go"
-  branch="release-6.0"
+  version="v7.0.0"
 
 [[constraint]]
   name="k8s.io/api"
-  branch="release-1.9"
+  branch="release-1.10"
 
 [[constraint]]
   name="k8s.io/apimachinery"
-  branch="release-1.9"
+  branch="release-1.10"
 
 [[constraint]]
   name = "github.com/sirupsen/logrus"
-  version = "^1.0.4"
+  version = "^1.0.5"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/russellcardullo/go-pingdom"
+  revision = "a213165348dd158c15258e0653f9dd7c0fb460ca"
