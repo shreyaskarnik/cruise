@@ -7,7 +7,7 @@ VERSION ?= $(GIT_REF)
 PKGS := $(shell go list ./...)
 
 test: install
-	go test ./...
+	go test ./... -v -cover
 
 check: test vet staticcheck unused
 	@echo Checking code is gofmted

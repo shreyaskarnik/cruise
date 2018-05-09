@@ -117,13 +117,22 @@
   version = "1.0.0"
 
 [[projects]]
+  name = "github.com/pmezard/go-difflib"
+  packages = ["difflib"]
+  revision = "792786c7400a136282c1664665ae0a8db921c6c2"
+  version = "v1.0.0"
+
+[[projects]]
   name = "github.com/russellcardullo/go-pingdom"
   packages = ["pingdom"]
   revision = "a213165348dd158c15258e0653f9dd7c0fb460ca"
 
 [[projects]]
   name = "github.com/sirupsen/logrus"
-  packages = ["."]
+  packages = [
+    ".",
+    "hooks/test"
+  ]
   revision = "c155da19408a8799da419ed3eeb0cb5db0ad5dbc"
   version = "v1.0.5"
 
@@ -132,6 +141,12 @@
   packages = ["."]
   revision = "583c0c0531f06d5278b7d917446061adc344b5cd"
   version = "v1.0.1"
+
+[[projects]]
+  name = "github.com/stretchr/testify"
+  packages = ["assert"]
+  revision = "12b6f73e6084dad08a7c6e575284b177ecafbc71"
+  version = "v1.2.1"
 
 [[projects]]
   branch = "master"
@@ -382,6 +397,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3ec9d2d3f6826f96991f08859ce6eb1ef0f3c7538b38f65c439cc66cf9c3e0ad"
+  inputs-digest = "ac71af03ea952a85a7e5279e10b2f57b7efb49e54eee8323b2083daf08d5bab8"
   solver-name = "gps-cdcl"
   solver-version = 1
