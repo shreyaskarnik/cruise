@@ -32,7 +32,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/heptiolabs/cruise/internal/cruise"
-	"github.com/russellcardullo/go-pingdom/pingdom"
+	"github.com/heptiolabs/cruise/internal/pingdom"
 
 	"github.com/sirupsen/logrus"
 )
@@ -62,10 +62,13 @@ func main() {
 		log.Infof("args: %v", args)
 
 		client := newClient(*kubeconfig, *inCluster)
-		c := &cruise.Cruise{
-			FieldLogger: log.WithField("context", "cruise"),
-			Client:      pingdom.NewClient(*username, *password, *apikey),
-		}
+		uptimeChecker, err := pingdom.NewPindomUptimeChecker(*username, *password, *apikey)
+
+		exitOnError(err)
+
+		logger := logrus.New().WithField("context", "cruise")
+
+		c := cruise.NewCruise(uptimeChecker, logger)
 		w := watchIngress(client, c)
 		w.Run(nil)
 	}
@@ -76,14 +79,14 @@ func newClient(kubeconfig string, inCluster bool) *kubernetes.Clientset {
 	var config *rest.Config
 	if kubeconfig != "" && !inCluster {
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-		check(err)
+		exitOnError(err)
 	} else {
 		config, err = rest.InClusterConfig()
-		check(err)
+		exitOnError(err)
 	}
 
 	client, err := kubernetes.NewForConfig(config)
-	check(err)
+	exitOnError(err)
 	return client
 }
 
@@ -96,7 +99,7 @@ func watchIngress(client *kubernetes.Clientset, rs ...cache.ResourceEventHandler
 	return sw
 }
 
-func check(err error) {
+func exitOnError(err error) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

@@ -17,30 +17,31 @@ package cruise
 
 import (
 	"fmt"
-	"sync"
+	"reflect"
 
-	"github.com/russellcardullo/go-pingdom/pingdom"
+	"github.com/heptiolabs/cruise/internal/pingdom"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/extensions/v1beta1"
-	"k8s.io/client-go/tools/cache"
 )
 
 type Cruise struct {
-	logrus.FieldLogger
+	logger  logrus.FieldLogger
+	checker pingdom.UptimeChecker
+}
 
-	mu sync.Mutex
-	*pingdom.Client
-	userId int // userid matching the PINGDOM_USERNAME field
-	checks map[string]*pingdom.CheckResponse
+func NewCruise(checker pingdom.UptimeChecker, logger logrus.FieldLogger) *Cruise {
+	return &Cruise{
+		logger:  logger,
+		checker: checker,
+	}
 }
 
 func (c *Cruise) OnAdd(obj interface{}) {
-	switch obj := obj.(type) {
-	case *v1beta1.Ingress:
-		c.recompute(nil, obj)
-	default:
-		c.Errorf("OnAdd unexpected type %T: %#v", obj, obj)
+	ing, ok := obj.(*v1beta1.Ingress)
+	if !ok {
+		c.logger.Errorf("OnAdd unexpected type %T: %#v", obj, obj)
 	}
+	c.recompute(nil, ing)
 }
 
 func (c *Cruise) OnUpdate(oldObj, newObj interface{}) {
@@ -48,12 +49,12 @@ func (c *Cruise) OnUpdate(oldObj, newObj interface{}) {
 	case *v1beta1.Ingress:
 		oldObj, ok := oldObj.(*v1beta1.Ingress)
 		if !ok {
-			c.Errorf("OnUpdate endpoints %#v received invalid oldObj %T; %#v", newObj, oldObj, oldObj)
+			c.logger.Errorf("OnUpdate endpoints %#v received invalid oldObj %T; %#v", newObj, oldObj, oldObj)
 			return
 		}
 		c.recompute(oldObj, newObj)
 	default:
-		c.Errorf("OnUpdate unexpected type %T: %#v", newObj, newObj)
+		c.logger.Errorf("OnUpdate unexpected type %T: %#v", newObj, newObj)
 	}
 }
 
@@ -61,48 +62,9 @@ func (c *Cruise) OnDelete(obj interface{}) {
 	switch obj := obj.(type) {
 	case *v1beta1.Ingress:
 		c.recompute(obj, nil)
-	case cache.DeletedFinalStateUnknown:
-		c.OnDelete(obj.Obj) // recurse into ourselves with the tombstoned value
 	default:
-		c.Errorf("OnDelete unexpected type %T: %#v", obj, obj)
+		c.logger.Errorf("OnDelete unexpected type %T: %#v", obj, obj)
 	}
-}
-
-// client returns an active pingdom Client.
-// On the first call to client the list of existing checks in c.checks is
-// populated.
-func (c *Cruise) client() *pingdom.Client {
-	c.mu.Lock()
-
-	// 1. refresh contact list and locate the userid of c.Client.User
-	// because of a limitation in the 2.0 api we have to pick the first
-	// contact id and hope it's the billing contact.
-	contacts, err := c.Client.Contacts.List()
-	if err != nil {
-		c.Fatalf("cannot list existing contacts: %v", err)
-		return nil // not reached
-	}
-	if len(contacts) < 1 {
-		c.Fatalf("cannot locate user id for Client.User %q", c.Client.User)
-		return nil // not reached
-	}
-	c.userId = contacts[0].ID
-
-	// 2. populate check list
-	if c.checks == nil {
-		list, err := c.Client.Checks.List()
-		if err != nil {
-			c.Fatalf("cannot list existing checks: %v", err)
-			return nil // not reached
-		}
-		c.checks = make(map[string]*pingdom.CheckResponse)
-		for i := range list {
-			check := list[i]
-			c.checks[check.Hostname] = &check
-		}
-	}
-	c.mu.Unlock()
-	return c.Client
 }
 
 // recompute creates checks for hosts present in newing but missing from olding,
@@ -126,68 +88,67 @@ func (c *Cruise) recompute(olding, newing *v1beta1.Ingress) {
 		}
 	}
 
-	log := c.WithField("ingress", fmt.Sprintf("%s/%s", newing.Namespace, newing.Name))
-
-	_ = c.client() // grab client to make sure c.pc and c.checks are populated
-
 	// store a list of active hostnames, anything present in olding but missing from
 	// newing will be removed.
 	active := make(map[string]bool)
 
-	for i, r := range newing.Spec.Rules {
+	for _, r := range newing.Spec.Rules {
 		host := r.Host
 		if host == "" {
-			log.Debugf("skipping rule %d, missing Host field", i)
+			c.logger.WithField("ingress", fmt.Sprintf("%s/%s", newing.Namespace, newing.Name)).Debugf("skipping rule %d, missing Host field", r.IngressRuleValue)
 			continue
 		}
+
 		active[host] = true // mark this host as active even if we end up skipping it
 
-		log := log.WithField("hostname", host)
-		if _, ok := c.checks[host]; ok {
-			log.Info("check already exists, skipping")
-			continue
+		if _, ok := c.checker.UptimeChecks()[host]; ok {
+			if olding.ObjectMeta.Name == "" ||
+				(reflect.DeepEqual(olding.Spec.Rules, newing.Spec.Rules) && reflect.DeepEqual(olding.Spec.TLS, newing.Spec.Rules)) {
+				c.logger.WithField("hostname", host).Info("check already exists, skipping")
+				continue
+			} else {
+				c.checker.DeleteUptimeCheck(host)
+			}
 		}
 
 		port := 80
 		if newing.Spec.TLS != nil {
 			port = 443
 		}
-		check := pingdom.HttpCheck{
-			Name:                     fmt.Sprintf("%s/%s (%s:%d)", newing.Namespace, newing.Name, host, port),
-			Hostname:                 host,
-			Resolution:               1, // check every minute
-			Encryption:               port == 443,
-			SendNotificationWhenDown: 1, // TODO(dfc) no idea what this does, but the API barks if it is not set.
-			ContactIds:               []int{c.userId},
+
+		check := pingdom.UptimeCheck{
+			Name:                   fmt.Sprintf("%s/%s (%s:%d)", newing.Namespace, newing.Name, host, port),
+			Hostname:               host,
+			CheckIntervalInMinutes: 1,
+			EnableTLS:              port == 443,
 		}
-		res, err := c.client().Checks.Create(&check)
+
+		err := c.checker.CreateUptimeCheck(&check)
 		if err != nil {
-			log.Error(err)
+			c.logger.Error(err)
 			continue
 		}
-		c.checks[check.Hostname] = res
-		log.Infof("check created")
+		c.logger.Info("check created")
 	}
 
-	for i, r := range olding.Spec.Rules {
+	for _, r := range olding.Spec.Rules {
 		host := r.Host
 		if host == "" {
-			log.Debugf("skipping rule %d, missing Host field", i)
+			c.logger.Debugf("skipping rule %d, missing Host field", r.IngressRuleValue)
 			continue
 		}
+
 		if active[host] {
 			// do not remove, this is an active check
 			continue
 		}
-		log := log.WithField("hostname", host)
-		check, ok := c.checks[host]
-		if !ok {
-			log.Errorf("cannot remove check, no cached entry") // can't remove the check without its ID
+
+		err := c.checker.DeleteUptimeCheck(host)
+		if err != nil {
+			c.logger.WithField("hostname", host).Error(err)
 			continue
 		}
-		c.client().Checks.Delete(check.ID)
-		delete(c.checks, host)
-		log.Info("check deleted")
-	}
 
+		c.logger.Info("check deleted")
+	}
 }
