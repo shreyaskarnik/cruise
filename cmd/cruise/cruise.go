@@ -31,8 +31,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/heptiolabs/cruise/http"
 	"github.com/heptiolabs/cruise/internal/cruise"
+	"github.com/heptiolabs/cruise/internal/pingdom"
 
 	"github.com/sirupsen/logrus"
 )
@@ -62,7 +62,7 @@ func main() {
 		log.Infof("args: %v", args)
 
 		client := newClient(*kubeconfig, *inCluster)
-		uptimeChecker, err := http.NewPindomUptimeChecker(*username, *password, *apikey)
+		uptimeChecker, err := pingdom.NewPindomUptimeChecker(*username, *password, *apikey)
 
 		exitOnError(err)
 

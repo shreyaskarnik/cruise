@@ -1,4 +1,4 @@
-package http
+package pingdom
 
 import (
 	"fmt"
@@ -34,12 +34,7 @@ func NewPindomUptimeChecker(user, password, key string) (UptimeChecker, error) {
 		uptimeChecks: make(map[string]*UptimeCheck),
 	}
 
-	err = c.SyncUptimeChecks()
-	if err != nil {
-		return nil, err
-	}
-
-	return c, nil
+	return c, c.SyncUptimeChecks()
 }
 
 func (c *PingdomUptimeChecker) UptimeChecks() map[string]*UptimeCheck {
@@ -95,9 +90,9 @@ func (c *PingdomUptimeChecker) DeleteUptimeCheck(hostName string) error {
 func toUptimeCheck(c pingdom.CheckResponse) *UptimeCheck {
 	rp := regexp.MustCompile("443")
 	return &UptimeCheck{
-		Hostname: c.Hostname,
-		ID:       c.ID,
-		Name:     c.Name,
+		Hostname:               c.Hostname,
+		ID:                     c.ID,
+		Name:                   c.Name,
 		CheckIntervalInMinutes: c.Resolution,
 		EnableTLS:              rp.MatchString(c.Name), // Pingdom API does not show it so we need to rely on the name
 	}

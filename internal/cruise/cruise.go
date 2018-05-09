@@ -19,17 +19,17 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/heptiolabs/cruise/http"
+	"github.com/heptiolabs/cruise/internal/pingdom"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/extensions/v1beta1"
 )
 
 type Cruise struct {
 	logger  logrus.FieldLogger
-	checker http.UptimeChecker
+	checker pingdom.UptimeChecker
 }
 
-func NewCruise(checker http.UptimeChecker, logger logrus.FieldLogger) *Cruise {
+func NewCruise(checker pingdom.UptimeChecker, logger logrus.FieldLogger) *Cruise {
 	return &Cruise{
 		logger:  logger,
 		checker: checker,
@@ -116,7 +116,7 @@ func (c *Cruise) recompute(olding, newing *v1beta1.Ingress) {
 			port = 443
 		}
 
-		check := http.UptimeCheck{
+		check := pingdom.UptimeCheck{
 			Name:                   fmt.Sprintf("%s/%s (%s:%d)", newing.Namespace, newing.Name, host, port),
 			Hostname:               host,
 			CheckIntervalInMinutes: 1,

@@ -1,4 +1,4 @@
-package http
+package pingdom
 
 type UptimeCheck struct {
 	Hostname               string

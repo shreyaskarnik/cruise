@@ -1,4 +1,4 @@
-package cruise_test
+package cruise
 
 import (
 	"fmt"
@@ -8,8 +8,7 @@ import (
 	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/heptiolabs/cruise/http"
-	"github.com/heptiolabs/cruise/internal/cruise"
+	"github.com/heptiolabs/cruise/internal/pingdom"
 	"k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -19,10 +18,10 @@ type fakeUptimeChecker struct {
 	CreateUptimeCheckInError bool
 	DeleteUptimeCheckCalled  bool
 	DeleteUptimeCheckInError bool
-	checks                   map[string]*http.UptimeCheck
+	checks                   map[string]*pingdom.UptimeCheck
 }
 
-func (f *fakeUptimeChecker) CreateUptimeCheck(check *http.UptimeCheck) error {
+func (f *fakeUptimeChecker) CreateUptimeCheck(check *pingdom.UptimeCheck) error {
 	f.CreateUptimeCheckCalled = true
 	if f.CreateUptimeCheckInError {
 		return fmt.Errorf("Something went wrong")
@@ -44,20 +43,20 @@ func (f *fakeUptimeChecker) SyncUptimeChecks() error {
 	return nil
 }
 
-func (f *fakeUptimeChecker) UptimeChecks() map[string]*http.UptimeCheck {
+func (f *fakeUptimeChecker) UptimeChecks() map[string]*pingdom.UptimeCheck {
 	return f.checks
 }
 
 func newFakeUptimeChecker() *fakeUptimeChecker {
 	return &fakeUptimeChecker{
-		checks: map[string]*http.UptimeCheck{},
+		checks: map[string]*pingdom.UptimeCheck{},
 	}
 }
 
-func newCruise(checker http.UptimeChecker) (*cruise.Cruise, *test.Hook) {
+func newCruise(checker pingdom.UptimeChecker) (*Cruise, *test.Hook) {
 	logger, hook := test.NewNullLogger()
 	logger.SetLevel(logrus.DebugLevel)
-	return cruise.NewCruise(checker, logger), hook
+	return NewCruise(checker, logger), hook
 }
 
 func TestOnAddNonIngress(t *testing.T) {
@@ -121,7 +120,7 @@ func TestOnAddIngressWithNonExistingUptimeCheck(t *testing.T) {
 	c.OnAdd(i)
 	assert.True(t, f.CreateUptimeCheckCalled)
 
-	check := &http.UptimeCheck{
+	check := &pingdom.UptimeCheck{
 		Hostname:               "example.com",
 		Name:                   "mynamespace/example (example.com:80)",
 		EnableTLS:              false,
@@ -206,7 +205,7 @@ func TestOnAddIngressWithNonExistingUptimeCheckTLS(t *testing.T) {
 	c.OnAdd(i)
 	assert.True(t, f.CreateUptimeCheckCalled)
 
-	check := &http.UptimeCheck{
+	check := &pingdom.UptimeCheck{
 		Hostname:               "example.com",
 		Name:                   "mynamespace/example (example.com:443)",
 		EnableTLS:              true,
@@ -234,8 +233,8 @@ func TestOnAddIngressWithoutHost(t *testing.T) {
 
 func TestOnAddIngressWithExistingUptimeCheck(t *testing.T) {
 	f := &fakeUptimeChecker{
-		checks: map[string]*http.UptimeCheck{
-			"example.com": &http.UptimeCheck{},
+		checks: map[string]*pingdom.UptimeCheck{
+			"example.com": &pingdom.UptimeCheck{},
 		},
 	}
 
@@ -257,8 +256,8 @@ func TestOnAddIngressWithExistingUptimeCheck(t *testing.T) {
 
 func TestOnDeleteIngress(t *testing.T) {
 	f := &fakeUptimeChecker{
-		checks: map[string]*http.UptimeCheck{
-			"example.com": &http.UptimeCheck{},
+		checks: map[string]*pingdom.UptimeCheck{
+			"example.com": &pingdom.UptimeCheck{},
 		},
 	}
 
@@ -281,8 +280,8 @@ func TestOnDeleteIngress(t *testing.T) {
 
 func TestOnUpdateIngressUptimeCheck(t *testing.T) {
 	f := &fakeUptimeChecker{
-		checks: map[string]*http.UptimeCheck{
-			"example.com": &http.UptimeCheck{},
+		checks: map[string]*pingdom.UptimeCheck{
+			"example.com": &pingdom.UptimeCheck{},
 		},
 	}
 
@@ -326,7 +325,7 @@ func TestOnUpdateIngressUptimeCheck(t *testing.T) {
 	assert.True(t, f.DeleteUptimeCheckCalled)
 	assert.True(t, f.CreateUptimeCheckCalled)
 
-	check := &http.UptimeCheck{
+	check := &pingdom.UptimeCheck{
 		Hostname:               "example.com",
 		Name:                   "mynamespace/example (example.com:443)",
 		EnableTLS:              true,
@@ -338,8 +337,8 @@ func TestOnUpdateIngressUptimeCheck(t *testing.T) {
 
 func TestOnUpdateIngressWithNoOldHost(t *testing.T) {
 	f := &fakeUptimeChecker{
-		checks: map[string]*http.UptimeCheck{
-			"example.com": &http.UptimeCheck{},
+		checks: map[string]*pingdom.UptimeCheck{
+			"example.com": &pingdom.UptimeCheck{},
 		},
 	}
 
@@ -381,7 +380,7 @@ func TestOnUpdateIngressWithNoOldHost(t *testing.T) {
 	assert.True(t, f.DeleteUptimeCheckCalled)
 	assert.True(t, f.CreateUptimeCheckCalled)
 
-	check := &http.UptimeCheck{
+	check := &pingdom.UptimeCheck{
 		Hostname:               "example.com",
 		Name:                   "mynamespace/example (example.com:443)",
 		EnableTLS:              true,

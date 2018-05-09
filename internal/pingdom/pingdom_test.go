@@ -1,10 +1,9 @@
-package http_test
+package pingdom
 
 import (
 	"os"
 	"testing"
 
-	"github.com/heptiolabs/cruise/http"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -30,16 +29,17 @@ func TestPingdomUptimeChecker(t *testing.T) {
 		t.Skip("skipping live test")
 	}
 
-	c, _ := http.NewPindomUptimeChecker(username, password, apikey)
+	c, err := NewPindomUptimeChecker(username, password, apikey)
+	assert.Nil(t, err)
 
-	check := &http.UptimeCheck{
+	check := &UptimeCheck{
 		Hostname:               "google.com",
 		Name:                   "mynamespace / google (google.com:443)",
 		EnableTLS:              true,
 		CheckIntervalInMinutes: 1,
 	}
 
-	err := c.CreateUptimeCheck(check)
+	err = c.CreateUptimeCheck(check)
 	assert.Nil(t, err)
 	assert.Equal(t, "google.com", c.UptimeChecks()["google.com"].Hostname)
 	assert.Equal(t, "mynamespace / google (google.com:443)", c.UptimeChecks()["google.com"].Name)
@@ -47,7 +47,8 @@ func TestPingdomUptimeChecker(t *testing.T) {
 	assert.True(t, c.UptimeChecks()["google.com"].EnableTLS)
 	assert.NotEqual(t, "", c.UptimeChecks()["google.com"].ID)
 
-	n, _ := http.NewPindomUptimeChecker(username, password, apikey)
+	n, err := NewPindomUptimeChecker(username, password, apikey)
+	assert.Nil(t, err)
 	err = n.SyncUptimeChecks()
 	assert.Nil(t, err)
 	assert.Equal(t, "google.com", c.UptimeChecks()["google.com"].Hostname)
